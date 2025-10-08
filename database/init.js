@@ -60,6 +60,7 @@ async function initializeDatabase() {
             user_id CHAR(36) PRIMARY KEY DEFAULT (uuid()),
             username VARCHAR(50) UNIQUE NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
+            password VARCHAR(100) NOT NULL,
             full_name VARCHAR(100) NOT NULL,
             role ENUM('admin', 'sales', 'engineer') NOT NULL,
             is_active BOOLEAN DEFAULT true,

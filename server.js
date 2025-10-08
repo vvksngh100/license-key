@@ -15,7 +15,7 @@ app.use(express.json());
 // Database
 initializeDatabase();
 
-// app.use('/api',router);
+app.use('/api',router);
 
 app.get('/', (req,res) => {
     res.send('server is running');
