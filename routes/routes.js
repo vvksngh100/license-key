@@ -3,6 +3,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { users, login, createUser } = require('../controllers/authController');
 const { generateSerialKey } = require('../controllers/serialKeyController');
 const { customers } = require('../controllers/customerController');
+const { registerLicense } = require('../controllers/licenseController');
 
 const router = express.Router();
 
@@ -18,5 +19,6 @@ router.get('/auth/me', authMiddleware, (req, res) => {
 });
 router.post('/auth/serial-key', authMiddleware, generateSerialKey);
 router.get('/auth/customers', authMiddleware, customers);
+router.post('/auth/register-license', registerLicense);
 
 module.exports = router;

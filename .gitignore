@@ -39,3 +39,7 @@ out/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Keys
+keys/
+*.pem

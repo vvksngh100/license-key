@@ -20,4 +20,6 @@ function getNetworkDetails() {
   return details;
 }
 
-module.exports = { getNetworkDetails };
+// module.exports = { getNetworkDetails };
+
+console.log(getNetworkDetails());
