@@ -2,10 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const { initializeDatabase } = require('./database/init');
 const router = require('./routes/routes');
+require('dotenv').config();
 
 const app = express();
 
-const port = 3002;
+const port = process.env.PORT || 3002;
 
 
 // Middleware
