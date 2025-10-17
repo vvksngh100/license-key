@@ -8,7 +8,7 @@ const saltRounds = 10;
 const users = async (req, res) => {
   try {
     const [users] = await pool.execute(`
-        SELECT * FROM users;
+        SELECT * FROM sk_users;
         `);
     if (users.length === 0) {
       return res.status(200).json({
@@ -42,8 +42,8 @@ const login = async (req, res) => {
     }
 
     const query = username
-      ? "SELECT * FROM users WHERE username = ?"
-      : "SELECT * FROM users WHERE email = ?";
+      ? "SELECT * FROM sk_users WHERE username = ?"
+      : "SELECT * FROM sk_users WHERE email = ?";
     const value = username || email;
 
     const [rows] = await pool.execute(query, [value]);
@@ -79,7 +79,7 @@ const login = async (req, res) => {
       message: "Logged in successfully.",
       token,
       user: {
-        id: user.id,
+        user_id: user.user_id,
         username: user.username,
         email: user.email,
         role: user.role,
@@ -101,7 +101,7 @@ const createUser = async (req, res) => {
 
     // Check if username or email already exist
     const [users] = await pool.execute(
-      `SELECT * FROM users WHERE username = ? OR email = ?`,
+      `SELECT * FROM sk_users WHERE username = ? OR email = ?`,
       [username, email]
     );
 
@@ -116,7 +116,7 @@ const createUser = async (req, res) => {
 
     // Insert new user
     const [result] = await pool.execute(
-      `INSERT INTO users (username, email, password, full_name, role) VALUES (?,?,?,?,?)`,
+      `INSERT INTO sk_users (username, email, password, full_name, role) VALUES (?,?,?,?,?)`,
       [username, email, hashedPassword, full_name, role]
     );
 
