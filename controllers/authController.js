@@ -1,4 +1,4 @@
-const { pool } = require("../database/db");
+const { prisma } = require("../database/prisma");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
@@ -7,26 +7,53 @@ const saltRounds = 10;
 
 const users = async (req, res) => {
   try {
-    const [users] = await pool.execute(`
-        SELECT * FROM sk_users;
-        `);
-    if (users.length === 0) {
+    const userRecords = await prisma.skUser.findMany({
+      select: {
+        userId: true,
+        username: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        lastLogin: true,
+        recver: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (userRecords.length === 0) {
       return res.status(200).json({
         status: true,
         message: "There is no records",
       });
     }
+
+    const formattedUsers = userRecords.map((u) => ({
+      user_id: u.userId,
+      username: u.username,
+      email: u.email,
+      full_name: u.fullName,
+      role: u.role,
+      is_active: u.isActive,
+      created_at: u.createdAt,
+      last_login: u.lastLogin,
+      recver: u.recver,
+    }));
+
     res.status(200).json({
       status: true,
       message: "Fetched all users successfully.",
-      users,
+      users: formattedUsers,
     });
   } catch (error) {
-    console.log("Failed to fetch the users: ", error);
+    console.error("Failed to fetch users: ", error);
     res.status(500).json({
       status: false,
       message: "Failed to fetch the users data.",
-      error,
+      error: error.message,
     });
   }
 };
@@ -41,19 +68,13 @@ const login = async (req, res) => {
         .json({ message: "Email/username and password are mandatory." });
     }
 
-    const query = username
-      ? "SELECT * FROM sk_users WHERE username = ?"
-      : "SELECT * FROM sk_users WHERE email = ?";
-    const value = username || email;
+    const user = await prisma.skUser.findFirst({
+      where: username ? { username } : { email },
+    });
 
-    const [rows] = await pool.execute(query, [value]);
-    console.log(rows);
-
-    if (rows.length === 0) {
+    if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
-
-    const user = rows[0];
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
@@ -62,10 +83,17 @@ const login = async (req, res) => {
         .json({ message: "Authentication failed: Incorrect password." });
     }
 
+    // Update last login timestamp
+    await prisma.skUser.update({
+      where: { userId: user.userId },
+      data: { lastLogin: new Date() },
+    });
+
     const payload = {
       username: user.username,
       email: user.email,
-      user_id: user.user_id,
+      user_id: user.userId,
+      role: user.role,
     };
 
     const jwtSecret = process.env.JWT_SECRET;
@@ -79,7 +107,7 @@ const login = async (req, res) => {
       message: "Logged in successfully.",
       token,
       user: {
-        user_id: user.user_id,
+        user_id: user.userId,
         username: user.username,
         email: user.email,
         role: user.role,
@@ -100,12 +128,13 @@ const createUser = async (req, res) => {
     }
 
     // Check if username or email already exist
-    const [users] = await pool.execute(
-      `SELECT * FROM sk_users WHERE username = ? OR email = ?`,
-      [username, email]
-    );
+    const existingUser = await prisma.skUser.findFirst({
+      where: {
+        OR: [{ username }, { email }],
+      },
+    });
 
-    if (users.length > 0) {
+    if (existingUser) {
       return res.status(409).json({
         message: "A user with provided username/email already exists",
       });
@@ -115,17 +144,20 @@ const createUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Insert new user
-    const [result] = await pool.execute(
-      `INSERT INTO sk_users (username, email, password, full_name, role) VALUES (?,?,?,?,?)`,
-      [username, email, hashedPassword, full_name, role]
-    );
-
-    console.log(result);
+    const newUser = await prisma.skUser.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword,
+        fullName: full_name,
+        role,
+      },
+    });
 
     res.status(201).json({
       status: true,
       message: "User added successfully",
-      id: result.insertId,
+      id: newUser.userId,
     });
   } catch (error) {
     console.error("Error while creating a user:", error);

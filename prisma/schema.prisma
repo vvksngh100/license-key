@@ -1,0 +1,137 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  admin
+  sales
+  engineer
+}
+
+enum LicenseType {
+  trial
+  enterprise
+}
+
+enum LicenseStatus {
+  active
+  inactive
+  revoked
+}
+
+model SkUser {
+  userId    String    @id @default(uuid()) @map("user_id")
+  username  String    @unique @db.VarChar(50)
+  email     String    @unique @db.VarChar(255)
+  password  String    @db.VarChar(100)
+  fullName  String    @map("full_name") @db.VarChar(100)
+  role      Role
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  lastLogin DateTime? @map("last_login")
+  recver    Int       @default(0)
+
+  auditLogs LicenseAuditLog[]
+
+  @@map("sk_users")
+}
+
+model Customer {
+  customerId    String    @id @default(uuid()) @map("customer_id")
+  email         String    @db.VarChar(255)
+  companyName   String?   @map("company_name") @db.VarChar(255)
+  contactPerson String?   @map("contact_person") @db.VarChar(100)
+  phone         String?   @db.VarChar(20)
+  address       String?   @db.Text
+  country       String?   @db.VarChar(50)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  recver        Int       @default(0)
+
+  licenses      License[]
+
+  @@index([email])
+  @@map("customers")
+}
+
+model License {
+  licenseId      String        @id @default(uuid()) @map("license_id")
+  serialKey      String        @unique @map("serial_key") @db.VarChar(100)
+  customerId     String        @map("customer_id")
+  productVersion String        @map("product_version") @db.VarChar(20)
+  licenseType    LicenseType   @default(trial) @map("license_type")
+  activationDate DateTime?     @map("activation_date")
+  validityDays   Int?          @map("validity_days")
+  expiresAt      DateTime?     @map("expires_at")
+  maxDevices     Int           @default(1) @map("max_devices")
+  status         LicenseStatus @default(inactive)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at")
+  createdBy      String?       @map("created_by")
+  updatedBy      String?       @map("updated_by")
+  recver         Int           @default(0)
+
+  customer       Customer          @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
+  activations    Activation[]
+  auditLogs      LicenseAuditLog[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("licenses")
+}
+
+model Activation {
+  activationId   String    @id @default(uuid()) @map("activation_id")
+  licenseId      String    @map("license_id")
+  macAddress     String    @map("mac_address") @db.VarChar(255)
+  hwid           String?   @db.VarChar(255)
+  deviceName     String?   @map("device_name") @db.VarChar(100)
+  ipAddress      String?   @map("ip_address") @db.VarChar(45)
+  activatedAt    DateTime  @default(now()) @map("activated_at")
+  lastValidation DateTime? @map("last_validation")
+  isActive       Boolean   @default(true) @map("is_active")
+  encryptedKey   String?   @map("encrypted_key") @db.Text
+  recver         Int       @default(0)
+
+  license        License   @relation(fields: [licenseId], references: [licenseId], onDelete: Cascade)
+
+  @@index([licenseId])
+  @@index([macAddress])
+  @@index([hwid])
+  @@index([isActive])
+  @@map("activations")
+}
+
+model LicenseAuditLog {
+  logId           String    @id @default(uuid()) @map("log_id")
+  userId          String?   @map("user_id")
+  licenseId       String    @map("license_id")
+  actionType      String    @map("action_type") @db.VarChar(20)
+  actionDetails   Json?     @map("action_details")
+  ipAddress       String?   @map("ip_address") @db.VarChar(45)
+  userAgent       String?   @map("user_agent") @db.Text
+  browserName     String?   @map("browser_name") @db.VarChar(50)
+  browserVersion  String?   @map("browser_version") @db.VarChar(20)
+  operatingSystem String?   @map("operating_system") @db.VarChar(50)
+  deviceType      String?   @map("device_type") @db.VarChar(20)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+  recver          Int       @default(0)
+
+  user            SkUser?   @relation(fields: [userId], references: [userId], onDelete: SetNull)
+  license         License   @relation(fields: [licenseId], references: [licenseId], onDelete: Cascade)
+
+  @@index([licenseId])
+  @@index([userId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("license_audit_log")
+}

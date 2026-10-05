@@ -1,39 +1,43 @@
-const { pool } = require("./db");
+const { prisma } = require("./prisma");
 const bcrypt = require("bcryptjs");
 
 async function seedDatabase() {
   try {
     console.log("Starting database seeding...");
 
-    // Default admin user
     const defaultUsers = [
       {
         username: "admin",
-        email: "elexorn.research@outlook.com",
-        password: "admin123",
-        full_name: "System Administrator",
-        role: "admin"
-      }
+        email: "vvksngh100@gmail.com",
+        password: "k8dfh8c@Pfv0gB2!xZ",
+        fullName: "System Administrator",
+        role: "admin",
+      },
     ];
 
     for (const userData of defaultUsers) {
-      // Check if user already exists
-      const [existingUsers] = await pool.execute(
-        "SELECT user_id FROM sk_users WHERE username = ? OR email = ?",
-        [userData.username, userData.email]
-      );
+      const existingUser = await prisma.skUser.findFirst({
+        where: {
+          OR: [
+            { username: userData.username },
+            { email: userData.email },
+          ],
+        },
+      });
 
-      if (existingUsers.length === 0) {
-        // Hash password
+      if (!existingUser) {
         const hashedPassword = await bcrypt.hash(userData.password, 10);
-        
-        // Insert user
-        await pool.execute(
-          `INSERT INTO sk_users (username, email, password, full_name, role, is_active) 
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [userData.username, userData.email, hashedPassword, userData.full_name, userData.role, true]
-        );
-        
+        await prisma.skUser.create({
+          data: {
+            username: userData.username,
+            email: userData.email,
+            password: hashedPassword,
+            fullName: userData.fullName,
+            role: userData.role,
+            isActive: true,
+          },
+        });
+
         console.log(`User ${userData.username} created successfully`);
         console.log(`You can login with:
           Username: ${userData.username}
@@ -52,15 +56,18 @@ async function seedDatabase() {
   }
 }
 
-// Run if this file is executed directly
 if (require.main === module) {
-  seedDatabase().then(() => {
-    console.log("Seeding process finished");
-    process.exit(0);
-  }).catch(error => {
-    console.error("Seeding process failed:", error);
-    process.exit(1);
-  });
+  seedDatabase()
+    .then(async () => {
+      await prisma.$disconnect();
+      console.log("Seeding process finished");
+      process.exit(0);
+    })
+    .catch(async (error) => {
+      await prisma.$disconnect();
+      console.error("Seeding process failed:", error);
+      process.exit(1);
+    });
 }
 
 module.exports = { seedDatabase };

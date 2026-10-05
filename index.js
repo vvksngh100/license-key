@@ -9,6 +9,9 @@ const app = express();
 const port = process.env.PORT || 3002;
 
 
+// Security & Proxy
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
