@@ -360,6 +360,61 @@ function verifyClientLicense(iniPath, publicKeyPem, physicalMac, physicalHwid) {
 
 ---
 
+## 🏛️ SOLID Architecture & Clean Code Design
+
+The codebase strictly adheres to the **5 SOLID Principles**:
+
+| Principle | Implementation in this Codebase |
+| :--- | :--- |
+| **S — Single Responsibility (SRP)** | • **Controllers** (`controllers/`): Strictly handle HTTP mapping and JSON serialization.<br>• **Services** (`services/`): Pure business logic, entitlement rules, and validation.<br>• **Repositories** (`repositories/`): Dedicated data access layer.<br>• **Crypto** (`crypto/`): Pure cryptographic signature generation. |
+| **O — Open / Closed (OCP)** | • The `BaseLicenseSigner` contract in `crypto/rsaLicenseSigner.js` allows plugging in new signature formats (e.g. Ed25519 or JWT) without modifying existing activation business logic. |
+| **L — Liskov Substitution (LSP)** | • Any class extending `BaseLicenseSigner` can be substituted into `LicenseService` without altering correctness. |
+| **I — Interface Segregation (ISP)** | • Segregated repositories (`UserRepository`, `CustomerRepository`, `LicenseRepository`) rather than a bloated monolithic database helper. |
+| **D — Dependency Inversion (DIP)** | • High-level services depend on repository contracts injected via constructors (`new LicenseService(licenseRepo, customerRepo, signer)`). Enables 100% testability with mock repositories. |
+
+---
+
+## 📂 Project Structure
+
+```
+Serial Key/
+├── controllers/              # HTTP Layer: Request parsing & status responses (SRP)
+│   ├── authController.js
+│   ├── customerController.js
+│   ├── licenseController.js
+│   └── serialKeyController.js
+├── services/                 # Domain Layer: Business rules & validation (SRP, DIP)
+│   ├── authService.js
+│   ├── customerService.js
+│   └── licenseService.js
+├── repositories/             # Data Access Layer: Prisma queries & transactions (DIP)
+│   ├── userRepository.js
+│   ├── customerRepository.js
+│   └── licenseRepository.js
+├── crypto/                   # Cryptographic Strategy: Signer contracts (OCP, LSP)
+│   └── rsaLicenseSigner.js
+├── database/                 # Prisma client singleton & seeder
+│   ├── prisma.js
+│   ├── init.js
+│   ├── seed.js
+│   └── db.js
+├── middleware/               # Auth (RBAC) & Rate Limiting
+│   ├── auth.js
+│   └── rateLimiter.js
+├── routes/                   # Express routing definitions
+│   └── routes.js
+├── utils/                    # Client metadata parser
+│   └── clientMeta.js
+├── prisma/                   # PostgreSQL schema definition
+│   └── schema.prisma
+├── index.js                  # App bootstrap, Swagger UI, & graceful shutdown
+├── package.json
+├── swagger.json              # OpenAPI 3.0 specification
+└── README.md
+```
+
+---
+
 ## License
 
 Proprietary software for **Energy Monitoring System**. All rights reserved.

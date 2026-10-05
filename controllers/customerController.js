@@ -1,47 +1,40 @@
-const { prisma } = require("../database/prisma");
+const { CustomerService } = require("../services/customerService");
 
-const customers = async (req, res) => {
+const defaultCustomerService = new CustomerService();
+
+const customers = async (req, res, next) => {
   try {
-    const customerList = await prisma.customer.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    const page = req.query.page ? Math.max(1, parseInt(req.query.page, 10)) : null;
+    const limit = req.query.limit ? Math.max(1, parseInt(req.query.limit, 10)) : null;
 
-    if (customerList.length === 0) {
+    const result = await defaultCustomerService.getCustomers({ page, limit });
+
+    if (result.customers.length === 0) {
       return res.status(200).json({
         status: true,
         message: "No record found",
+        customers: [],
       });
     }
 
-    const formattedCustomers = customerList.map((c) => ({
-      customer_id: c.customerId,
-      email: c.email,
-      company_name: c.companyName,
-      contact_person: c.contactPerson,
-      phone: c.phone,
-      address: c.address,
-      country: c.country,
-      created_at: c.createdAt,
-      updated_at: c.updatedAt,
-      created_by: c.createdBy,
-      updated_by: c.updatedBy,
-      recver: c.recver,
-    }));
-
-    return res.status(200).json({
+    const response = {
       status: true,
       message: "Fetched all customers details successfully",
-      customers: formattedCustomers,
-    });
+      customers: result.customers,
+    };
+
+    if (result.total !== null) {
+      response.pagination = {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: Math.ceil(result.total / result.limit),
+      };
+    }
+
+    return res.status(200).json(response);
   } catch (error) {
-    console.error("Failed to fetch customers:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Failed to fetch the customers details",
-      error: error.message,
-    });
+    next(error);
   }
 };
 
