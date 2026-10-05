@@ -1,16 +1,16 @@
 {
   "name": "serial-key",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "node database/seed.js",
+    "prisma:seed": "node src/database/seed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -21,15 +21,18 @@
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
     "jsonwebtoken": "^9.0.2",
+    "pino": "^9.5.0",
     "swagger-ui-express": "^5.0.1",
     "ua-parser-js": "^2.0.5",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "nodemon": "^3.1.10",
+    "pino-pretty": "^13.0.0",
     "prisma": "^5.22.0"
   },
   "prisma": {
-    "seed": "node database/seed.js"
+    "seed": "node src/database/seed.js"
   }
 }

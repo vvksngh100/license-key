@@ -1,11 +1,13 @@
 const { AuthService } = require("../services/authService");
+const { extractClientMeta } = require("../utils/clientMeta");
 
 const defaultAuthService = new AuthService();
 
 const login = async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
-    const result = await defaultAuthService.login({ username, email, password });
+    const meta = extractClientMeta(req);
+    const result = await defaultAuthService.login({ username, email, password, meta });
 
     return res.status(200).json({
       status: true,

@@ -1,14 +1,20 @@
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./swagger.json');
+const { validateEnvironment } = require('./config/env');
+const { logger } = require('./utils/logger');
 const { initializeDatabase } = require('./database/init');
 const { prisma } = require('./database/prisma');
 const router = require('./routes/routes');
-require('dotenv').config();
+
+// 1. Fail-Fast Startup Validation
+validateEnvironment();
 
 const app = express();
-
 const port = process.env.PORT || 3002;
 
 // Security & Reverse Proxy IP Trust
@@ -43,34 +49,35 @@ app.use((err, req, res, next) => {
 
   // Differentiate expected client errors (4xx) from critical server crashes (5xx)
   if (statusCode >= 500) {
-    console.error(`💥 [${statusCode} Server Error] ${req.method} ${req.originalUrl || req.url}:`, err);
+    logger.error({ err, method: req.method, url: req.originalUrl || req.url }, `Server Error: ${err.message}`);
   } else {
-    console.warn(`⚠️  [${statusCode}] ${req.method} ${req.originalUrl || req.url} - ${err.message}`);
+    logger.warn({ statusCode, method: req.method, url: req.originalUrl || req.url }, err.message);
   }
 
   res.status(statusCode).json({
     status: false,
     message: err.message || "Internal Server Error",
+    ...(err.errors ? { errors: err.errors } : {}),
     ...(process.env.NODE_ENV === "development" && statusCode >= 500 ? { stack: err.stack } : {}),
   });
 });
 
 // Start HTTP Server
 const server = app.listen(port, () => {
-  console.log(`Server started on port ${port}`);
-  console.log(`Interactive Swagger Docs available at http://localhost:${port}/api-docs`);
+  logger.info(`Server started on port ${port}`);
+  logger.info(`Interactive Swagger Docs available at http://localhost:${port}/api-docs`);
 });
 
 // Graceful shutdown to release Prisma connection pool on Supabase
 const handleShutdown = async (signal) => {
-  console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+  logger.info(`Received ${signal}. Shutting down gracefully...`);
   server.close(async () => {
     try {
       await prisma.$disconnect();
-      console.log("Database connection pool closed successfully.");
+      logger.info("Database connection pool closed successfully.");
       process.exit(0);
     } catch (e) {
-      console.error("Error closing Prisma connection:", e);
+      logger.error({ err: e }, "Error closing Prisma connection");
       process.exit(1);
     }
   });

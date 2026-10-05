@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { UserRepository } = require("../repositories/userRepository");
+const { logger } = require("../utils/logger");
 require("dotenv").config();
 
 const saltRounds = 10;
@@ -10,7 +11,7 @@ class AuthService {
     this.userRepo = userRepository;
   }
 
-  async login({ username, email, password }) {
+  async login({ username, email, password, meta = {} }) {
     if ((!username && !email) || !password) {
       const err = new Error("Email/username and password are mandatory.");
       err.statusCode = 400;
@@ -20,24 +21,45 @@ class AuthService {
     const identifier = username || email;
     const user = await this.userRepo.findByUsernameOrEmail(identifier);
 
+    // 1. User does not exist (Log forensic truth internally, return generic error to client)
     if (!user) {
-      const err = new Error("User not found.");
-      err.statusCode = 404;
+      logger.warn(
+        { identifier, ip: meta.ipAddress, userAgent: meta.userAgent },
+        "Login failed: User not found in database"
+      );
+      const err = new Error("Invalid username/email or password.");
+      err.statusCode = 401;
       throw err;
     }
 
+    // 2. User exists but is deactivated
     if (!user.isActive) {
+      logger.warn(
+        { identifier, userId: user.userId, ip: meta.ipAddress },
+        "Login failed: Account is deactivated"
+      );
       const err = new Error("Account is deactivated. Please contact an administrator.");
       err.statusCode = 403;
       throw err;
     }
 
+    // 3. Password comparison failed (Log forensic truth internally, return generic error to client)
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      const err = new Error("Authentication failed: Incorrect password.");
+      logger.warn(
+        { identifier, userId: user.userId, ip: meta.ipAddress },
+        "Login failed: Incorrect password attempt"
+      );
+      const err = new Error("Invalid username/email or password.");
       err.statusCode = 401;
       throw err;
     }
+
+    // 4. Login successful
+    logger.info(
+      { identifier, userId: user.userId, role: user.role, ip: meta.ipAddress },
+      "User logged in successfully"
+    );
 
     // Update last login timestamp
     await this.userRepo.updateLastLogin(user.userId);

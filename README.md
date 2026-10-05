@@ -350,13 +350,13 @@ function verifyClientLicense(iniPath, publicKeyPem, physicalMac, physicalHwid) {
 
 | Script | Command | Purpose |
 | :--- | :--- | :--- |
-| `npm start` | `node index.js` | Runs production server |
-| `npm run dev` | `nodemon index.js` | Runs development server with hot-reloading |
+| `npm start` | `node src/index.js` | Runs production server |
+| `npm run dev` | `nodemon src/index.js` | Runs development server with hot-reloading |
 | `npm run prisma:generate` | `prisma generate` | Re-generates Prisma Client types |
 | `npm run prisma:push` | `prisma db push` | Pushes schema directly to PostgreSQL |
 | `npm run prisma:migrate` | `prisma migrate dev`| Applies versioned database migrations |
 | `npm run prisma:studio` | `prisma studio` | Launches web database viewer |
-| `npm run prisma:seed` | `node database/seed.js`| Seeds administrator account |
+| `npm run prisma:seed` | `node src/database/seed.js`| Seeds administrator account |
 
 ---
 
@@ -378,38 +378,49 @@ The codebase strictly adheres to the **5 SOLID Principles**:
 
 ```
 Serial Key/
-├── controllers/              # HTTP Layer: Request parsing & status responses (SRP)
-│   ├── authController.js
-│   ├── customerController.js
-│   ├── licenseController.js
-│   └── serialKeyController.js
-├── services/                 # Domain Layer: Business rules & validation (SRP, DIP)
-│   ├── authService.js
-│   ├── customerService.js
-│   └── licenseService.js
-├── repositories/             # Data Access Layer: Prisma queries & transactions (DIP)
-│   ├── userRepository.js
-│   ├── customerRepository.js
-│   └── licenseRepository.js
-├── crypto/                   # Cryptographic Strategy: Signer contracts (OCP, LSP)
-│   └── rsaLicenseSigner.js
-├── database/                 # Prisma client singleton & seeder
-│   ├── prisma.js
-│   ├── init.js
-│   ├── seed.js
-│   └── db.js
-├── middleware/               # Auth (RBAC) & Rate Limiting
-│   ├── auth.js
-│   └── rateLimiter.js
-├── routes/                   # Express routing definitions
-│   └── routes.js
-├── utils/                    # Client metadata parser
-│   └── clientMeta.js
-├── prisma/                   # PostgreSQL schema definition
+├── src/                                  # 100% Application Source Code
+│   ├── index.js                          # Server bootstrap, Swagger UI, & graceful shutdown
+│   ├── swagger.json                      # OpenAPI 3.0 specification
+│   ├── config/                           # Configuration & Fail-Fast checks
+│   │   └── env.js                        # Startup environment variable validation
+│   ├── validators/                       # Schema Validation (Zod)
+│   │   └── schemas.js                    # Request payload validation schemas
+│   ├── middleware/                       # Middleware
+│   │   ├── auth.js                       # JWT & Role-Based Access Control (requireRole)
+│   │   ├── rateLimiter.js                # Express rate limiters for login & activation
+│   │   └── validate.js                   # Zod request body validation middleware
+│   ├── controllers/                      # HTTP Layer: Request parsing & status responses (SRP)
+│   │   ├── authController.js
+│   │   ├── customerController.js
+│   │   ├── licenseController.js
+│   │   └── serialKeyController.js
+│   ├── services/                         # Domain Layer: Business rules & validation (SRP, DIP)
+│   │   ├── authService.js
+│   │   ├── customerService.js
+│   │   └── licenseService.js
+│   ├── repositories/                     # Data Access Layer: Prisma queries & transactions (DIP)
+│   │   ├── userRepository.js
+│   │   ├── customerRepository.js
+│   │   └── licenseRepository.js
+│   ├── crypto/                           # Cryptographic Strategy: Signer contracts (OCP, LSP)
+│   │   └── rsaLicenseSigner.js
+│   ├── database/                         # Prisma client singleton & seeder
+│   │   ├── prisma.js
+│   │   ├── init.js
+│   │   ├── seed.js
+│   │   └── db.js
+│   ├── routes/                           # Express routing definitions
+│   │   └── routes.js
+│   └── utils/                            # Shared utilities
+│       ├── clientMeta.js                 # User-Agent & IP extraction helper
+│       └── logger.js                     # Structured Pino logger with pretty-printing
+├── prisma/                               # Database Schema
 │   └── schema.prisma
-├── index.js                  # App bootstrap, Swagger UI, & graceful shutdown
+├── dist/                                 # Build artifacts
+├── keys/                                 # RSA key certificates
+├── .env                                  # Environment variables
+├── .gitignore
 ├── package.json
-├── swagger.json              # OpenAPI 3.0 specification
 └── README.md
 ```
 
