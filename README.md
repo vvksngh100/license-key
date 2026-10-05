@@ -1,564 +1,365 @@
-# 🛡️ Energy Monitoring System — Licensing & Device Activation Service
+# Industrial Licensing & Device Activation Engine (Production-Grade Node.js + Prisma)
 
-A production-ready, cryptographically secure licensing and device activation backend built with **Node.js**, **Express**, **PostgreSQL**, and **Prisma ORM**.
+<div align="center">
 
-This service issues product serial keys, manages customer entitlements, enforces multi-device limits, and cryptographically signs license payloads using **RSA-SHA256**. Client applications (industrial PCs, desktop software, or IoT edge gateways) can verify licenses offline with a bundled public key and check in periodically via an online validation heartbeat.
+[![Node.js](https://img.shields.io/badge/Node.js-v20+-43853D?style=for-the-badge&logo=node.js)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-v5.0+-000000?style=for-the-badge&logo=express)](https://expressjs.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-v15+-336791?style=for-the-badge&logo=postgresql)](https://www.postgresql.org)
+[![Prisma ORM](https://img.shields.io/badge/Prisma-v5.22+-2D3748?style=for-the-badge&logo=prisma)](https://www.prisma.io)
+[![RSA Cryptography](https://img.shields.io/badge/RSA--SHA256-2048--bit-E05D44?style=for-the-badge&logo=letsencrypt)](https://nodejs.org/api/crypto.html)
+[![JWT](https://img.shields.io/badge/JWT-Protected-000000?style=for-the-badge&logo=jsonwebtokens)](https://jwt.io)
+[![OpenAPI/Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203.0-85EA2D?style=for-the-badge&logo=swagger)](https://swagger.io)
 
----
+**Cryptographically Bound Hardware Licensing Engine with Asymmetric RSA Signatures & Multi-Device Concurrency Control**  
+_Engineered for zero-leak offline enforcement, hardware anti-cloning (HWID + MAC), self-healing re-activations, and crash-proof execution on resource-constrained environments_
 
-## 📋 Table of Contents
+<br />
 
-- [Key Features](#-key-features)
-- [Architecture & Tech Stack](#-architecture--tech-stack)
-- [Database Schema (Prisma)](#-database-schema-prisma)
-- [Cryptographic Verification Workflow](#-cryptographic-verification-workflow)
-- [Getting Started](#-getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Configuration](#environment-configuration)
-  - [Database Setup & Seeding](#database-setup--seeding)
-  - [Running the Server](#running-the-server)
-- [API Reference](#-api-reference)
-  - [Authentication](#authentication)
-  - [Staff & Customer Management](#staff--customer-management)
-  - [Serial Key Issuance](#serial-key-issuance)
-  - [Device Hardware Activation & Heartbeat](#device-hardware-activation--heartbeat)
-  - [License Administration & Revocation](#license-administration--revocation)
-- [Client Integration Guide (.exe / Desktop)](#-client-integration-guide-exe--desktop)
-  - [1. Generating Hardware ID (HWID)](#1-generating-hardware-id-hwid-windows)
-  - [2. Validating the Signed .ini File Offline](#2-validating-the-signed-ini-file-offline)
-- [NPM Scripts](#-npm-scripts)
-- [Project Structure](#-project-structure)
+[![API Docs](https://img.shields.io/badge/Swagger-Interactive%20API%20Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](#-interactive-api-documentation-swagger--openapi-30)
+[![Database Schema](https://img.shields.io/badge/Prisma-PostgreSQL%20Schema-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](#-database-schema--erd)
+
+</div>
 
 ---
 
-## 🚀 Key Features
+## Executive Summary
 
-- **🔐 Asymmetric RSA-SHA256 Signing**: Licenses are signed on the server with a private key. The client application verifies licenses offline with a bundled public key without exposing private credentials.
-- **💻 Hardware Binding (Anti-Piracy & Anti-Cloning)**: Binds licenses to both **MAC Address** and a multi-factor **Hardware ID (HWID)** derived from CPU, Motherboard, and Disk serials. Prevents copying `.ini` license files between machines or spoofing network adapters.
-- **🔄 Multi-Device Seat Management**: Supports licenses with configurable `max_devices` (e.g. 1 seat for Trial, 5 or more seats for Enterprise).
-- **🩹 Re-Activation & Recovery**: If an already-activated machine reinstall its OS or loses its license file, re-registering the same key restores the existing signed `.ini` without burning an extra device seat.
-- **⏳ Expiration & Trial Support**: Supports fixed trial periods (e.g. 30 days) and custom subscription durations. Expiry timestamps are signed inside the license file for offline enforcement.
-- **👥 Customer Deduplication**: Automatically finds or updates existing customer profiles by email rather than creating redundant database rows.
-- **🛡️ Role-Based Access Control (RBAC)**: Enforces permission boundaries across `admin`, `sales`, and `engineer` roles.
-- **🚦 Brute-Force Rate Limiting**: Protects login and activation endpoints with `express-rate-limit` against brute-force password guessing and automated key scanning.
-- **📊 Comprehensive Audit Logging**: Tracks every key generation, activation, re-activation, and revocation with client IP, user agent, browser, and OS metadata.
-- **🔁 Optimistic Concurrency Versioning (`recver`)**: Automatic `recver` version counter on every table for safe concurrent data handling.
+The **Industrial Licensing & Device Activation Engine** is an enterprise-grade backend service built for the **Energy Monitoring System** ecosystem. It governs software entitlements, manages commercial subscriptions, and cryptographically signs client machine activations for industrial gateways, edge PCs, and desktop dashboards.
+
+Unlike naive licensing solutions that rely on insecure plain-text checks or brittle third-party licensing SaaS APIs, this system is engineered to solve **fundamental security, hardware-binding, and distributed concurrency challenges**:
+- **Zero Cloud Licensing Lock-in (Air-Gapped Offline Support):** Uses asymmetric **RSA-SHA256** digital signatures. The private signing key resides strictly on the backend, allowing client binaries (`.exe`) to verify signed `.ini` license files offline with zero external network connectivity.
+- **Hardware Anti-Cloning & Anti-Spoofing:** Binds software entitlements to a composite **Hardware Fingerprint (HWID)** derived from CPU, Motherboard, and Disk serial numbers alongside physical network MAC addresses, defeating VM cloning and network adapter spoofing.
+- **Dynamic Seat Concurrency & Self-Healing Recovery:** Enforces multi-device caps (`max_devices`) while automatically detecting re-installs on authorized hardware to restore existing licenses without burning extra client seats or requiring manual support intervention.
+- **Optimistic Concurrency Control (`recver`):** Features an automated record-versioning engine across all relational models to prevent lost updates during concurrent license provisioning and updates.
 
 ---
 
-## 🛠️ Architecture & Tech Stack
+## High-Level System Topology
 
-| Component | Technology |
+```
++----------------------------------------------------------------------------------------+
+|                      CLIENT RUNTIME TIER (.exe / Edge Gateway)                         |
+|  - Multi-Factor Hardware Fingerprint Generator: SHA-256(CPU + BIOS + Disk)             |
+|  - Cryptographic Offline Verifier: Verifies RSA-SHA256 Signature via public.pem        |
+|  - Periodic Online Heartbeat / Validation Agent (POST /api/auth/validate-license)       |
++-------------------------------------------+--------------------------------------------+
+                                            | HTTPS / Signed Payload Transfer
+                                            v
++----------------------------------------------------------------------------------------+
+|                          EXPRESS 5 API SERVER (Application Tier)                       |
+|  - Role-Based Access Control (RBAC): Admin | Sales | Engineer                          |
+|  - Distributed Rate Limiter: Login Guard (10 req/15m), Activation Guard (30 req/m)     |
+|  - Customer Deduplication & Atomic Entitlement Provisioning Engine                     |
+|  - Interactive OpenAPI / Swagger UI at /api-docs                                       |
++---------------------+--------------------------------------------+---------------------+
+                      | RSA Private Key Signing                    | Prisma Query Engine
+                      v                                            v
+       +------------------------------+             +------------------------------------+
+       |   CRYPTOGRAPHIC CORE         |             |   PRISMA ORM / CLIENT EXTENSION    |
+       |   (Node Native crypto)       |             |   (database/prisma.js)             |
+       |  - RSA-SHA256 2048-bit       |             |  - Automated OCC recver increment  |
+       |  - Base64 .ini payload pack  |             |  - Query logging & connection pool |
+       |  - Strict key validation     |             |  - Zero-cost relation joins        |
+       +------------------------------+             +-----------------+------------------+
+                                                                      |
+                                                                      v
+                                                    +------------------------------------+
+                                                    |      POSTGRESQL RELATIONAL STORE   |
+                                                    |  - sk_users (Staff credentials)    |
+                                                    |  - customers (Deduplicated CRM)    |
+                                                    |  - licenses (Serial keys & caps)   |
+                                                    |  - activations (Hardware bindings) |
+                                                    |  - license_audit_log (Audit trail) |
+                                                    +------------------------------------+
+```
+
+---
+
+## Architectural Deep Dives
+
+### 1. Asymmetric Cryptographic Signing (RSA-SHA256)
+
+#### The Problem Statement
+Symmetric license keys (shared secret keys or AES tokens) require the client binary to store the decryption secret. Malicious users can decompile or reverse-engineer the client `.exe`, extract the symmetric key, and generate an unlimited number of valid serial keys.
+
+#### Our Solution: Asymmetric RSA-SHA256 Signature Isolation
+The server acts as a **Certificate Authority**:
+1. The server retains the **2048-bit Private Key (`private.pem`)**.
+2. The client `.exe` contains only the public verification key (`public.pem`).
+3. During activation, the server signs a canonical JSON payload:
+   ```json
+   {
+     "serial_key": "K8F4-MN92-XP77-L4Q2",
+     "mac_address": "00:1A:2B:3C:4D:5E",
+     "hwid": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+     "license_type": "enterprise",
+     "issued_at": "2026-10-05T10:00:00.000Z",
+     "expires_at": "2027-10-05T10:00:00.000Z"
+   }
+   ```
+4. Output is serialized into an industrial standard `.ini` file:
+   ```ini
+   [License]
+   data=eyJzZXJpYWxfa2V5IjoiSzhGNC1NTjkyLV...
+   signature=MEQCIG5...
+   ```
+5. **Tamper Proof:** Modifying even a single character in the `data` payload breaks the RSA digital signature, preventing users from altering expiration dates, MAC addresses, or license tiers.
+
+---
+
+### 2. Multi-Factor Hardware Fingerprinting (Anti-Cloning & Anti-Spoofing)
+
+#### The Problem Statement
+Relying solely on a MAC address allows users to:
+- Change or clone the network adapter MAC address in Windows Device Manager.
+- Snapshot a Virtual Machine (VM) running an activated client and duplicate it across 50 bare-metal servers.
+
+#### Our Solution: Non-Transferable Multi-Attribute Fingerprint (HWID)
+The client gathers immutable motherboard, processor, and storage controller hardware serial numbers directly from system management instrumentation (WMI):
+```javascript
+// Client HWID Generation
+const cpu = execSync("wmic cpu get ProcessorId").toString().replace("ProcessorId", "").trim();
+const bios = execSync("wmic csproduct get uuid").toString().replace("UUID", "").trim();
+const disk = execSync("wmic diskdrive get serialnumber").toString().split("\n")[1].trim();
+
+const hwid = crypto.createHash("sha256").update(`${cpu}-${bios}-${disk}`).digest("hex");
+```
+- **Defense-in-Depth:** The server records both `mac_address` and `hwid`. Even if an adversary clones a virtual network card, the underlying CPU and BIOS UUID mismatch halts application startup immediately.
+
+---
+
+### 3. Dynamic Seat Concurrency & Self-Healing Recovery
+
+#### The "Burned Seat" Dilemma
+In rigid licensing systems, if a licensed machine's operating system crashes or the hard drive is replaced, re-registering with the same serial key throws:
+`"Error: License already activated (Limit: 1/1)"`. The client is locked out and forced to open support tickets.
+
+#### Our Solution: Self-Healing Device Identity Resolution
+When `/api/auth/register-license` is called:
+```mermaid
+flowchart TD
+    A["Incoming Activation Request (serial_key, mac_address, hwid)"] --> B{"Is this (MAC || HWID)\nalready registered for this license?"}
+    B -- "YES (Known Device)" --> C["Re-activation Recovery Flow:\n- Refresh last_validation timestamp\n- Re-issue current valid .ini\n- Burn 0 extra seats\n- Log REACTIVATION in Audit Trail"]
+    B -- "NO (New Device)" --> D{"Count Active Devices < max_devices?"}
+    D -- "NO (Seat Cap Reached)" --> E["❌ HTTP 403:\nMax allowed devices reached"]
+    D -- "YES (Seats Available)" --> F["✅ Atomic Activation:\n- Register new Activation row\n- Set license status to active\n- Log ACTIVATION in Audit Trail"]
+```
+This guarantees zero legitimate user lockouts during OS re-installations while strictly honoring `max_devices` quotas.
+
+---
+
+### 4. Automated Optimistic Concurrency Control (`recver`)
+
+Every table in PostgreSQL implements an integer version column (`recver Int @default(0)`).
+To avoid repetitive manual increment logic across controllers, our Prisma Client utilizes a **Prisma Query Extension (`$extends`)**:
+
+```javascript
+// database/prisma.js
+const prisma = basePrisma.$extends({
+  query: {
+    $allModels: {
+      async update({ args, query }) {
+        if (args.data && args.data.recver === undefined) {
+          args.data = { ...args.data, recver: { increment: 1 } };
+        }
+        return query(args);
+      },
+    },
+  },
+});
+```
+Every modification atomically increments `recver`, enabling database-level optimistic concurrency protection against race conditions.
+
+---
+
+## 🗄️ Database Schema & ERD
+
+```
++-------------------+        +--------------------+        +---------------------+
+|     sk_users      |        |     customers      |        |      licenses       |
++-------------------+        +--------------------+        +---------------------+
+| user_id (UUID) PK |        | customer_id (UUID) |        | license_id (UUID) PK|
+| username (Unique) |        | email (Indexed)    |<---+---| customer_id (FK)    |
+| email (Unique)    |        | company_name       |    |   | serial_key (Unique) |
+| password (bcrypt) |        | contact_person     |    |   | product_version     |
+| role (Enum)       |        | phone, country     |    |   | license_type (Enum) |
+| is_active         |        | recver (OCC)       |    |   | validity_days       |
+| recver (OCC)      |        +--------------------+    |   | expires_at (Indexed)|
++---------+---------+                                  |   | max_devices         |
+          |                                            |   | status (Indexed)    |
+          |                                            |   | recver (OCC)        |
+          |                                            |   +----------+----------+
+          |                                            |              |
+          |          +----------------------------+    |              |
+          |          |     license_audit_log      |    |              v
+          |          +----------------------------+    |   +---------------------+
+          +--------->| log_id (UUID) PK           |    |   |     activations     |
+                     | user_id (FK, Nullable)     |    |   +---------------------+
+                     | license_id (FK) <----------+----+---| activation_id PK    |
+                     | action_type (CREATE, ...)  |        | license_id (FK)     |
+                     | action_details (JSON)      |        | mac_address (Indexed|
+                     | ip_address, user_agent     |        | hwid (Indexed)      |
+                     | recver (OCC)               |        | is_active (Indexed) |
+                     +----------------------------+        | encrypted_key (INI) |
+                                                           | recver (OCC)        |
+                                                           +---------------------+
+```
+
+---
+
+## 📖 Interactive API Documentation (Swagger / OpenAPI 3.0)
+
+The backend features complete OpenAPI 3.0 specification served interactively via `swagger-ui-express`.
+
+- **Live Interactive UI:** `http://localhost:3002/api-docs`
+- **Specification File:** [`swagger.json`](./swagger.json)
+- **Features:** Direct JWT authentication tester, request schema inspectors, and live mock runner.
+
+### API Endpoints Summary
+
+| Method | Endpoint | Access Level | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/login` | Public (Rate-limited: 10/15m) | Authenticates staff and issues JWT token |
+| `GET` | `/api/auth/me` | Bearer Token | Fetches current user session profile |
+| `POST` | `/api/auth/create-user` | **Admin Only** | Creates staff user (`admin`, `sales`, `engineer`) |
+| `GET` | `/api/auth/users` | **Admin Only** | Lists all internal staff users |
+| `GET` | `/api/auth/customers` | Admin, Sales, Engineer | Fetches list of all registered customers |
+| `POST` | `/api/auth/serial-key` | **Admin, Sales** | Issues serial key with deduplication & expiry |
+| `POST` | `/api/auth/register-license` | Public (Rate-limited: 30/m) | Hardware registration, RSA signing, & recovery |
+| `POST` | `/api/auth/validate-license` | Public (Rate-limited: 30/m) | Periodic heartbeat and online validation |
+| `POST` | `/api/auth/revoke-license` | **Admin Only** | Revokes serial key and shuts down all seats |
+| `POST` | `/api/auth/deactivate-device` | **Admin Only** | Releases an individual hardware seat |
+
+---
+
+## Tech Stack & Core Libraries
+
+| Layer | Technologies |
 | :--- | :--- |
-| **Runtime** | Node.js (CommonJS) |
-| **Framework** | Express.js 5 |
-| **Database** | PostgreSQL |
-| **ORM** | Prisma ORM 5 |
-| **Authentication** | JWT (`jsonwebtoken`) & `bcryptjs` password hashing |
-| **Cryptography** | Node.js native `crypto` (RSA-SHA256, 2048-bit keys) |
-| **Security** | `express-rate-limit`, `cors` |
-| **Device Intelligence** | `ua-parser-js` |
+| **API Runtime** | Node.js (CommonJS), Express 5 |
+| **Relational Database** | PostgreSQL 15+ |
+| **Database ORM** | Prisma ORM 5 with `$extends` query middleware |
+| **Cryptography** | Node native `crypto` (RSA-SHA256, 2048-bit key length) |
+| **Security & RBAC** | `jsonwebtoken`, `bcryptjs`, `express-rate-limit`, `cors` |
+| **Device Analytics** | `ua-parser-js` (User-agent browser, OS, and hardware parser) |
+| **API Documentation** | OpenAPI 3.0, Swagger UI Express |
 
 ---
 
-## 🗄️ Database Schema (Prisma)
-
-The database schema is defined in [`prisma/schema.prisma`](./prisma/schema.prisma):
-
-```mermaid
-erDiagram
-    SK_USERS ||--o{ LICENSE_AUDIT_LOG : "audited by"
-    CUSTOMERS ||--o{ LICENSES : "owns"
-    LICENSES ||--o{ ACTIVATIONS : "activates on"
-    LICENSES ||--o{ LICENSE_AUDIT_LOG : "logs"
-
-    SK_USERS {
-        string user_id PK
-        string username UK
-        string email UK
-        string password
-        string full_name
-        enum role "admin | sales | engineer"
-        boolean is_active
-        datetime last_login
-        int recver
-    }
-
-    CUSTOMERS {
-        string customer_id PK
-        string email
-        string company_name
-        string contact_person
-        string phone
-        string address
-        string country
-        int recver
-    }
-
-    LICENSES {
-        string license_id PK
-        string serial_key UK
-        string customer_id FK
-        string product_version
-        enum license_type "trial | enterprise"
-        datetime activation_date
-        int validity_days
-        datetime expires_at
-        int max_devices
-        enum status "active | inactive | revoked"
-        int recver
-    }
-
-    ACTIVATIONS {
-        string activation_id PK
-        string license_id FK
-        string mac_address
-        string hwid
-        string device_name
-        string ip_address
-        datetime activated_at
-        datetime last_validation
-        boolean is_active
-        text encrypted_key
-        int recver
-    }
-
-    LICENSE_AUDIT_LOG {
-        string log_id PK
-        string user_id FK
-        string license_id FK
-        string action_type "CREATE | ACTIVATION | REACTIVATION | REVOKE | DEACTIVATE_DEVICE"
-        json action_details
-        string ip_address
-        string user_agent
-        int recver
-    }
-```
-
----
-
-## 🔐 Cryptographic Verification Workflow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Admin as Staff / Sales
-    actor Client as Client Device (.exe)
-    participant Server as Licensing API
-    participant DB as PostgreSQL (Prisma)
-
-    Note over Admin,Server: 1. Key Generation
-    Admin->>Server: POST /api/auth/serial-key (customer info, validity_days, max_devices)
-    Server->>DB: Upsert Customer & Create License (status: inactive)
-    Server-->>Admin: Returns 16-char Serial Key (XXXX-XXXX-XXXX-XXXX)
-
-    Note over Client,Server: 2. Hardware Registration
-    Client->>Server: POST /api/auth/register-license (serial_key, mac_address, hwid, device_name)
-    Server->>DB: Validate key & check active devices < max_devices
-    Server->>Server: Sign {serial_key, mac_address, hwid, expires_at} using RSA private.pem
-    Server->>DB: Insert Activation & Update License (status: active)
-    Server-->>Client: Returns signed .ini content
-
-    Note over Client: 3. Daily Offline Run
-    Client->>Client: Verify .ini signature using bundled public.pem
-    Client->>Client: Verify local physical HWID matches signed HWID
-
-    Note over Client,Server: 4. Periodic Online Heartbeat
-    Client->>Server: POST /api/auth/validate-license (serial_key, mac_address, hwid)
-    Server->>DB: Update last_validation & verify not revoked/expired
-    Server-->>Client: Returns { valid: true }
-```
-
----
-
-## 📦 Getting Started
+## Getting Started
 
 ### Prerequisites
+- **Node.js** v18.0.0+ (v20+ recommended)
+- **PostgreSQL** instance (local or hosted via Supabase, Neon, AWS RDS)
 
-- **Node.js** (v18.0.0 or higher recommended)
-- **PostgreSQL** (v13 or higher running locally or in cloud e.g. Supabase, AWS RDS, Neon)
-- **OpenSSL** (optional, for regenerating RSA key pairs)
+### 1. Repository Setup & Dependencies
+```bash
+git clone https://github.com/vvksngh100/license-key.git
+cd "Serial Key"
+npm install
+```
 
----
-
-### Installation
-
-1. Clone or open the project directory:
-   ```bash
-   cd "Serial Key"
-   ```
-
-2. Install all dependencies:
-   ```bash
-   npm install
-   ```
-
----
-
-### Environment Configuration
-
-Create or update the `.env` file in the root directory:
-
+### 2. Environment Configuration
+Create or configure `.env` in the root directory:
 ```env
-# Server Port
 PORT=3002
+NODE_ENV=development
 
-# PostgreSQL Connection String for Prisma
-DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/serial_key?schema=public"
+# PostgreSQL Connection URL
+DATABASE_URL="postgresql://postgres:password@localhost:5432/serial_key?schema=public"
 
-# JWT Secret & Expiration
-JWT_SECRET="your-super-strong-jwt-secret-at-least-32-chars"
+# JWT Secret & Expiry
+JWT_SECRET="your-strong-production-jwt-secret-at-least-32-chars"
 JWT_EXPIRES_IN="7d"
 
-# RSA 2048-bit Private Key (Base64-encoded)
+# Base64-Encoded RSA 2048-Bit Keys
 PRIVATE_KEY="LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t..."
-
-# RSA 2048-bit Public Key (Base64-encoded, for client verification)
 PUBLIC_KEY="LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0..."
 ```
 
-> **Tip:** You can generate a fresh Base64 RSA key pair in PowerShell:
-> ```powershell
-> # Encode private.pem to base64
-> [Convert]::ToBase64String([IO.File]::ReadAllBytes("keys/private.pem"))
-> ```
-
----
-
-### Database Setup & Seeding
-
-1. **Push the Prisma schema to your PostgreSQL database**:
-   ```bash
-   npm run prisma:push
-   ```
-
-2. **Generate the Prisma Client**:
-   ```bash
-   npm run prisma:generate
-   ```
-
-3. **Seed the initial Administrator account**:
-   ```bash
-   npm run prisma:seed
-   ```
-   *Default Admin login:*
-   - **Username**: `admin`
-   - **Email**: `vvksngh100@gmail.com`
-   - **Password**: configured in `database/seed.js`
-
----
-
-### Running the Server
-
+### 3. Database Initialization & Seeding
 ```bash
-# Start in development mode (with nodemon auto-restart)
+# Push schema to PostgreSQL (creates tables & indexes)
+npm run prisma:push
+
+# Generate Prisma Client
+npm run prisma:generate
+
+# Seed the default admin user
+npm run prisma:seed
+```
+
+### 4. Running the Application
+```bash
+# Development with hot-reload
 npm run dev
 
-# Start in production mode
+# Production
 npm start
 ```
-
-The server will start on `http://localhost:3002` (or the port defined in `.env`).
-
----
-
-## 📡 API Reference
-
-Base URL: `http://localhost:3002/api`
-
-### Authentication
-
-#### 1. Staff Login
-- **Endpoint:** `POST /api/auth/login`
-- **Rate Limit:** 10 requests / 15 minutes
-- **Request Body:**
-  ```json
-  {
-    "username": "admin",
-    "password": "your-password"
-  }
-  ```
-- **Response (200 OK):**
-  ```json
-  {
-    "status": true,
-    "message": "Logged in successfully.",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5...",
-    "user": {
-      "user_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "username": "admin",
-      "email": "admin@example.com",
-      "role": "admin"
-    }
-  }
-  ```
-
-#### 2. Get Authenticated User Profile
-- **Endpoint:** `GET /api/auth/me`
-- **Headers:** `Authorization: Bearer <token>`
-- **Response (200 OK):** Current decoded user object.
+- API Server: `http://localhost:3002`
+- Swagger UI: `http://localhost:3002/api-docs`
 
 ---
 
-### Staff & Customer Management
+## Client Integration (.exe / Edge Agent)
 
-#### 3. Create Staff User (Admin Only)
-- **Endpoint:** `POST /api/auth/create-user`
-- **Headers:** `Authorization: Bearer <token>` (Role: `admin`)
-- **Request Body:**
-  ```json
-  {
-    "username": "john_sales",
-    "email": "john@company.com",
-    "password": "StrongPassword123!",
-    "full_name": "John Doe",
-    "role": "sales"
-  }
-  ```
-
-#### 4. List All Staff Users (Admin Only)
-- **Endpoint:** `GET /api/auth/users`
-- **Headers:** `Authorization: Bearer <token>` (Role: `admin`)
-
-#### 5. List All Customers
-- **Endpoint:** `GET /api/auth/customers`
-- **Headers:** `Authorization: Bearer <token>` (Role: `admin`, `sales`, or `engineer`)
-
----
-
-### Serial Key Issuance
-
-#### 6. Generate Serial Key
-- **Endpoint:** `POST /api/auth/serial-key`
-- **Headers:** `Authorization: Bearer <token>` (Role: `admin` or `sales`)
-- **Request Body:**
-  ```json
-  {
-    "email": "purchasing@clientcorp.com",
-    "company_name": "Client Corp Ltd",
-    "contact_person": "Jane Smith",
-    "phone": "+1 555-0199",
-    "address": "123 Industrial Way",
-    "country": "USA",
-    "product_version": "2.4.0",
-    "license_type": "enterprise",
-    "validity_days": 365,
-    "max_devices": 5
-  }
-  ```
-- **Response (200 OK):**
-  ```json
-  {
-    "status": true,
-    "message": "Serial key generated successfully",
-    "serialKey": "G4H8-9KL2-MN45-PQ78",
-    "licenseId": "8f6c3a1b-...",
-    "expiresAt": "2027-10-05T10:00:00.000Z",
-    "maxDevices": 5,
-    "attempt": 1
-  }
-  ```
-
----
-
-### Device Hardware Activation & Heartbeat
-
-#### 7. Client Hardware Registration & Activation
-- **Endpoint:** `POST /api/auth/register-license`
-- **Auth:** Public (Rate-limited: 30 requests / minute)
-- **Request Body:**
-  ```json
-  {
-    "serial_key": "G4H8-9KL2-MN45-PQ78",
-    "mac_address": "00:1A:2B:3C:4D:5E",
-    "hwid": "a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
-    "device_name": "Plant-1-Gateway-PC"
-  }
-  ```
-- **Response (200 OK):**
-  ```json
-  {
-    "status": true,
-    "message": "Device registered and license activated successfully",
-    "iniContent": "[License]\ndata=eyJzZXJpYWxfa2V5IjoiRzRIO...==\nsignature=MEQCIG...\n",
-    "expiresAt": "2027-10-05T10:00:00.000Z",
-    "attempt": 1
-  }
-  ```
-  *(If the same device re-activates, returns `isReactivation: true` with the existing `.ini` license without burning an extra seat).*
-
-#### 8. Periodic Heartbeat / Validation
-- **Endpoint:** `POST /api/auth/validate-license`
-- **Auth:** Public (Rate-limited: 30 requests / minute)
-- **Request Body:**
-  ```json
-  {
-    "serial_key": "G4H8-9KL2-MN45-PQ78",
-    "mac_address": "00:1A:2B:3C:4D:5E",
-    "hwid": "a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9"
-  }
-  ```
-- **Response (200 OK):**
-  ```json
-  {
-    "status": true,
-    "valid": true,
-    "message": "License is active and valid",
-    "licenseType": "enterprise",
-    "expiresAt": "2027-10-05T10:00:00.000Z"
-  }
-  ```
-
----
-
-### License Administration & Revocation
-
-#### 9. Revoke License (Admin Only)
-- **Endpoint:** `POST /api/auth/revoke-license`
-- **Headers:** `Authorization: Bearer <token>` (Role: `admin`)
-- **Request Body:**
-  ```json
-  {
-    "serial_key": "G4H8-9KL2-MN45-PQ78",
-    "reason": "Payment dispute / contract terminated"
-  }
-  ```
-- **Response (200 OK):** All linked device activations are deactivated instantly.
-
-#### 10. Deactivate Single Device Seat (Admin Only)
-- **Endpoint:** `POST /api/auth/deactivate-device`
-- **Headers:** `Authorization: Bearer <token>` (Role: `admin`)
-- **Request Body:**
-  ```json
-  {
-    "activation_id": "c1a2b3c4-...",
-    "reason": "Old hardware decommissioned"
-  }
-  ```
-- **Response (200 OK):** Frees up 1 seat for the customer on their multi-device license.
-
----
-
-## 💻 Client Integration Guide (.exe / Desktop)
-
-### 1. Generating Hardware ID (HWID) on Windows
-In your client application or edge agent, compute the machine's hardware fingerprint:
-
-```javascript
-const { execSync } = require("child_process");
-const crypto = require("crypto");
-
-function getHardwareFingerprint() {
-  try {
-    const cpu = execSync("wmic cpu get ProcessorId").toString().replace("ProcessorId", "").trim();
-    const bios = execSync("wmic csproduct get uuid").toString().replace("UUID", "").trim();
-    const disk = execSync("wmic diskdrive get serialnumber").toString().split("\n")[1].trim();
-
-    return crypto.createHash("sha256").update(`${cpu}-${bios}-${disk}`).digest("hex");
-  } catch (err) {
-    // Fallback for virtualized or restricted environments
-    return null;
-  }
-}
-```
-
-### 2. Validating the Signed .ini File Offline
-The client app saves the returned `.ini` to disk (e.g. `license.ini`). On every startup:
+Client applications can verify licenses with **zero network connectivity** using the bundled `public.pem`:
 
 ```javascript
 const fs = require("fs");
 const crypto = require("crypto");
 
-function verifyLocalLicense(iniFilePath, publicKeyPem, currentDeviceMac, currentHwid) {
-  const content = fs.readFileSync(iniFilePath, "utf8");
+function verifyClientLicense(iniPath, publicKeyPem, physicalMac, physicalHwid) {
+  const iniContent = fs.readFileSync(iniPath, "utf8");
+  const dataMatch = iniContent.match(/data=(.+)/);
+  const sigMatch = iniContent.match(/signature=(.+)/);
 
-  const dataMatch = content.match(/data=(.+)/);
-  const sigMatch = content.match(/signature=(.+)/);
+  if (!dataMatch || !sigMatch) throw new Error("Corrupted license file.");
 
-  if (!dataMatch || !sigMatch) {
-    throw new Error("Invalid license file structure.");
-  }
+  const payloadJson = Buffer.from(dataMatch[1].trim(), "base64").toString("utf8");
+  const payload = JSON.parse(payloadJson);
 
-  const base64Data = dataMatch[1].trim();
-  const signature = sigMatch[1].trim();
-  const jsonString = Buffer.from(base64Data, "base64").toString("utf8");
-  const payload = JSON.parse(jsonString);
-
-  // 1. Verify RSA-SHA256 signature with bundled public key
+  // 1. Asymmetric Signature Check
   const verifier = crypto.createVerify("RSA-SHA256");
-  verifier.update(jsonString);
-  const isValidSig = verifier.verify(publicKeyPem, signature, "base64");
-
-  if (!isValidSig) {
-    throw new Error("License file has been tampered with or corrupted!");
+  verifier.update(payloadJson);
+  if (!verifier.verify(publicKeyPem, sigMatch[1].trim(), "base64")) {
+    throw new Error("License signature is INVALID. Tampering detected!");
   }
 
-  // 2. Verify Hardware Binding (Anti-copy check)
-  if (payload.mac_address.toUpperCase() !== currentDeviceMac.toUpperCase()) {
-    throw new Error("License belongs to another computer (MAC mismatch)!");
+  // 2. Hardware Binding Check
+  if (payload.mac_address.toUpperCase() !== physicalMac.toUpperCase()) {
+    throw new Error("License belongs to another computer (MAC Mismatch)!");
   }
-  if (payload.hwid && currentHwid && payload.hwid !== currentHwid) {
-    throw new Error("License belongs to another computer (Hardware mismatch)!");
+  if (payload.hwid && physicalHwid && payload.hwid !== physicalHwid) {
+    throw new Error("License belongs to another computer (HWID Mismatch)!");
   }
 
-  // 3. Verify Expiration
+  // 3. Expiration Check
   if (payload.expires_at && new Date(payload.expires_at) < new Date()) {
     throw new Error("Your software license has expired!");
   }
 
-  return payload; // License is valid!
+  return payload; // Valid license
 }
 ```
 
 ---
 
-## ⚡ NPM Scripts
+## NPM Scripts
 
 | Script | Command | Purpose |
 | :--- | :--- | :--- |
 | `npm start` | `node index.js` | Runs production server |
-| `npm run dev` | `nodemon index.js` | Runs development server with hot-reload |
-| `npm run prisma:generate` | `prisma generate` | Generates TypeScript/JavaScript Prisma Client |
-| `npm run prisma:push` | `prisma db push` | Pushes schema changes directly to PostgreSQL |
-| `npm run prisma:migrate` | `prisma migrate dev`| Creates and runs SQL migrations |
-| `npm run prisma:studio` | `prisma studio` | Opens web-based GUI to browse PostgreSQL data |
-| `npm run prisma:seed` | `node database/seed.js`| Seeds initial admin user into PostgreSQL |
+| `npm run dev` | `nodemon index.js` | Runs development server with hot-reloading |
+| `npm run prisma:generate` | `prisma generate` | Re-generates Prisma Client types |
+| `npm run prisma:push` | `prisma db push` | Pushes schema directly to PostgreSQL |
+| `npm run prisma:migrate` | `prisma migrate dev`| Applies versioned database migrations |
+| `npm run prisma:studio` | `prisma studio` | Launches web database viewer |
+| `npm run prisma:seed` | `node database/seed.js`| Seeds administrator account |
 
 ---
 
-## 📂 Project Structure
+## License
 
-```
-Serial Key/
-├── controllers/
-│   ├── authController.js        # Internal staff login, user creation, and profile
-│   ├── customerController.js    # Customer listing and details
-│   ├── licenseController.js     # Hardware registration, RSA signing, heartbeat, revoke
-│   └── serialKeyController.js   # Serial key generator with customer deduplication
-├── database/
-│   ├── db.js                    # Database re-export helper
-│   ├── init.js                  # Database connection tester and seeder
-│   ├── prisma.js                # Prisma Client instance with auto-recver extension
-│   └── seed.js                  # Administrator seeding script
-├── keys/
-│   ├── private.pem              # RSA private key (keep confidential, ignored by git)
-│   └── public.pem               # RSA public key (shipped with client application)
-├── middleware/
-│   ├── auth.js                  # JWT validation & Role-Based Access Control (requireRole)
-│   └── rateLimiter.js           # Express rate limiters for login & activation
-├── prisma/
-│   └── schema.prisma            # PostgreSQL schema, models, enums, and indexes
-├── routes/
-│   └── routes.js                # Express routing definitions
-├── .env                         # Environment variables (port, db url, rsa keys)
-├── .gitignore                   # Git ignore rules (.env, keys/*.pem, node_modules)
-├── index.js                     # Express app entry point
-├── package.json                 # Project dependencies and npm scripts
-└── README.md                    # Project documentation
-```
-
----
-
-## 📄 License
 Proprietary software for **Energy Monitoring System**. All rights reserved.

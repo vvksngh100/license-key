@@ -1,0 +1,367 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Industrial Licensing & Device Activation Engine",
+    "description": "Production-grade licensing and cryptographic device activation system for the Energy Monitoring System platform. Built with Express, PostgreSQL, Prisma ORM, and RSA-SHA256 asymmetric signing.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "System Administrator",
+      "email": "vvksngh100@gmail.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current Server Environment"
+    }
+  ],
+  "tags": [
+    { "name": "Authentication", "description": "Internal staff authentication and session management" },
+    { "name": "User Management", "description": "Admin operations for staff user accounts" },
+    { "name": "Customer & Licensing", "description": "Customer profiles and serial key issuance" },
+    { "name": "Device Activation & Heartbeat", "description": "Public client device registration and online verification" },
+    { "name": "License Administration", "description": "Administrative revocation and device seat management" }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Internal staff login",
+        "description": "Authenticate an administrative, sales, or engineering user using username/email and password. Returns a signed JWT token.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "username": { "type": "string", "example": "admin" },
+                  "email": { "type": "string", "example": "admin@example.com" },
+                  "password": { "type": "string", "example": "your_secure_password" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Logged in successfully." },
+                    "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." },
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "user_id": { "type": "string", "format": "uuid" },
+                        "username": { "type": "string", "example": "admin" },
+                        "email": { "type": "string", "example": "vvksngh100@gmail.com" },
+                        "role": { "type": "string", "enum": ["admin", "sales", "engineer"] }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing username/email or password" },
+          "401": { "description": "Incorrect credentials" },
+          "404": { "description": "User not found" },
+          "429": { "description": "Too many login attempts. Rate limit exceeded." }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Get authenticated user profile",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Authenticated user metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean", "example": true },
+                    "user": { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Missing or invalid token" }
+        }
+      }
+    },
+    "/api/auth/create-user": {
+      "post": {
+        "tags": ["User Management"],
+        "summary": "Create new internal staff account (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "email", "password", "full_name", "role"],
+                "properties": {
+                  "username": { "type": "string", "example": "sales_john" },
+                  "email": { "type": "string", "format": "email", "example": "john@energymonitoring.com" },
+                  "password": { "type": "string", "example": "SecurePass123!" },
+                  "full_name": { "type": "string", "example": "John Doe" },
+                  "role": { "type": "string", "enum": ["admin", "sales", "engineer"], "example": "sales" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created successfully" },
+          "403": { "description": "Forbidden: Requires admin role" },
+          "409": { "description": "Username or email already exists" }
+        }
+      }
+    },
+    "/api/auth/users": {
+      "get": {
+        "tags": ["User Management"],
+        "summary": "List all internal staff accounts (Admin Only)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Array of user records" },
+          "403": { "description": "Forbidden: Requires admin role" }
+        }
+      }
+    },
+    "/api/auth/customers": {
+      "get": {
+        "tags": ["Customer & Licensing"],
+        "summary": "List all customer accounts",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of customers with contact details" }
+        }
+      }
+    },
+    "/api/auth/serial-key": {
+      "post": {
+        "tags": ["Customer & Licensing"],
+        "summary": "Generate a new product serial key (Admin or Sales)",
+        "description": "Issues a 16-character license key (XXXX-XXXX-XXXX-XXXX). Performs automatic customer deduplication, sets device limits and expiration dates, and logs the operation in the audit trail.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "contact@clientcorp.com" },
+                  "company_name": { "type": "string", "example": "Client Corp International" },
+                  "contact_person": { "type": "string", "example": "Jane Smith" },
+                  "phone": { "type": "string", "example": "+1 555-0199" },
+                  "address": { "type": "string", "example": "456 Industrial Parkway" },
+                  "country": { "type": "string", "example": "USA" },
+                  "product_version": { "type": "string", "example": "2.4.0" },
+                  "license_type": { "type": "string", "enum": ["trial", "enterprise"], "example": "enterprise" },
+                  "validity_days": { "type": "integer", "example": 365, "description": "Days until expiration (default: 30 for trial, 365 for enterprise)" },
+                  "max_devices": { "type": "integer", "example": 5, "description": "Maximum number of simultaneous hardware machines allowed" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Serial key successfully issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Serial key generated successfully" },
+                    "serialKey": { "type": "string", "example": "K8F4-MN92-XP77-L4Q2" },
+                    "licenseId": { "type": "string", "format": "uuid" },
+                    "expiresAt": { "type": "string", "format": "date-time" },
+                    "maxDevices": { "type": "integer", "example": 5 },
+                    "attempt": { "type": "integer", "example": 1 }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid email or request payload" },
+          "403": { "description": "Forbidden: Requires admin or sales role" }
+        }
+      }
+    },
+    "/api/auth/register-license": {
+      "post": {
+        "tags": ["Device Activation & Heartbeat"],
+        "summary": "Client Hardware Activation & Signature Issuance",
+        "description": "Public endpoint called by client desktop applications (.exe) or industrial edge gateways. Binds the serial key to the machine's MAC address and optional Hardware ID (HWID), verifies device count limits, signs the payload with RSA-SHA256, and returns a signed .ini file. Supports self-healing re-activation for reinstalled machines.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["serial_key", "mac_address", "device_name"],
+                "properties": {
+                  "serial_key": { "type": "string", "example": "K8F4-MN92-XP77-L4Q2" },
+                  "mac_address": { "type": "string", "example": "00:1A:2B:3C:4D:5E" },
+                  "hwid": { "type": "string", "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "description": "SHA-256 multi-factor hardware fingerprint" },
+                  "device_name": { "type": "string", "example": "Turbine-Monitor-01" },
+                  "ip_address": { "type": "string", "example": "192.168.1.150" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device activated or restored successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Device registered and license activated successfully" },
+                    "iniContent": { "type": "string", "example": "[License]\ndata=eyJzZXJpYWxfa2V5IjoiSzhGNC0...==\nsignature=MEQCIG5...\n" },
+                    "expiresAt": { "type": "string", "format": "date-time" },
+                    "isReactivation": { "type": "boolean", "example": false }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing required fields" },
+          "403": { "description": "License expired, revoked, or max device seats exceeded" },
+          "404": { "description": "Invalid serial key" },
+          "429": { "description": "Rate limit exceeded (Max 30 requests/min)" }
+        }
+      }
+    },
+    "/api/auth/validate-license": {
+      "post": {
+        "tags": ["Device Activation & Heartbeat"],
+        "summary": "Periodic Online Heartbeat / License Check",
+        "description": "Lightweight heartbeat endpoint for client machines to verify their active entitlement, check for revocations, and report current IP and validation timestamps.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["serial_key", "mac_address"],
+                "properties": {
+                  "serial_key": { "type": "string", "example": "K8F4-MN92-XP77-L4Q2" },
+                  "mac_address": { "type": "string", "example": "00:1A:2B:3C:4D:5E" },
+                  "hwid": { "type": "string", "example": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "License is active and valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean", "example": true },
+                    "valid": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "License is active and valid" },
+                    "licenseType": { "type": "string", "example": "enterprise" },
+                    "expiresAt": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Device not authorized, license revoked, or license expired" },
+          "404": { "description": "License not found" }
+        }
+      }
+    },
+    "/api/auth/revoke-license": {
+      "post": {
+        "tags": ["License Administration"],
+        "summary": "Revoke an entire license (Admin Only)",
+        "description": "Immediately sets license status to 'revoked' and disconnects all linked device activations. Creates a tamper-proof REVOKE audit log.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "serial_key": { "type": "string", "example": "K8F4-MN92-XP77-L4Q2" },
+                  "license_id": { "type": "string", "format": "uuid" },
+                  "reason": { "type": "string", "example": "Payment defaulted" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "License revoked and all device seats disabled" },
+          "403": { "description": "Forbidden: Requires admin role" },
+          "404": { "description": "License not found" }
+        }
+      }
+    },
+    "/api/auth/deactivate-device": {
+      "post": {
+        "tags": ["License Administration"],
+        "summary": "Deactivate a single device machine seat (Admin Only)",
+        "description": "Releases an individual machine's slot from a multi-device license (e.g. if a computer was decommissioned or replaced), allowing a new machine to register.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["activation_id"],
+                "properties": {
+                  "activation_id": { "type": "string", "format": "uuid" },
+                  "reason": { "type": "string", "example": "Decommissioned hardware" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Device seat released successfully" },
+          "403": { "description": "Forbidden: Requires admin role" },
+          "404": { "description": "Activation record not found" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your JWT token obtained from /api/auth/login"
+      }
+    }
+  }
+}
